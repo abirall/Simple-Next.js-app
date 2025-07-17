@@ -1,4 +1,4 @@
-name: Deploy Dockerized Next.js App to EC2
+name: Build and Push Docker Image to ECR
 
 on:
   push:
@@ -7,30 +7,30 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to EC2
+    name: Build and Push to ECR
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Copy Files to EC2
-        uses: appleboy/scp-action@v0.1.3
-        with:
-          host: ${{ secrets.NEXTJS_HOST }}
-          username: ${{ secrets.NEXTJS_USER }}
-          key: ${{ secrets.NEXTJS_KEY }}
-          source: "."
-          target: "~/nextjs-docker"
+      - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: SSH and Deploy
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.NEXTJS_HOST }}
-          username: ${{ secrets.NEXTJS_USER }}
-          key: ${{ secrets.NEXTJS_KEY }}
-          script: |
-            cd ~/nextjs-docker
-            docker-compose down || true
-            docker-compose up -d --build
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Build, Tag, and Push Docker image to ECR
+      env:
+        ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+        ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+        IMAGE_TAG: latest
+      run: |
+        docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
