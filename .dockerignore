@@ -1,0 +1,2 @@
+# Node modules (should be installed inside Docker)
+node_modules
