@@ -28,7 +28,7 @@ COPY --from=builder /app ./
 EXPOSE 3000
 
 # Start Next.js in production mode
-CMD ["npm", "start" "dev"]
+CMD ["npm", "start"]
 
 
 
