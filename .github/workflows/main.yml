@@ -1,4 +1,4 @@
-name: Build, Push to ECR, and Deploy to ECS
+name: Build and Push to ECR
 
 on:
   push:
@@ -6,12 +6,11 @@ on:
       - main
 
 jobs:
-  deploy:
-    name: Deploy to ECS Fargate
+  push-to-ecr:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Configure AWS credentials
@@ -24,32 +23,12 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, Tag, and Push Docker image
+      - name: Build, Tag, and Push Docker Image
         env:
-          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}         # e.g. 123456789012.dkr.ecr.ap-south-1.amazonaws.com
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}     # e.g. nextjs-app
           IMAGE_TAG: latest
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-      - name: Update ECS Service
-        env:
-          CLUSTER_NAME: nextjs-cluster
-          SERVICE_NAME: nextjs-service
-          TASK_DEFINITION_FAMILY: nextjs-task
-          CONTAINER_NAME: nextjs-app
-          IMAGE_URI: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest
-        run: |
-          echo "Registering new task definition..."
-          TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition $TASK_DEFINITION_FAMILY)
-          NEW_TASK_DEF=$(echo $TASK_DEFINITION | jq --arg IMAGE "$IMAGE_URI" '.taskDefinition | {family: .family, containerDefinitions: [.containerDefinitions[] | .image = $IMAGE], requiresCompatibilities: .requiresCompatibilities, networkMode: .networkMode, cpu: .cpu, memory: .memory, executionRoleArn: .executionRoleArn}')
-          NEW_TASK_DEF_JSON=$(echo $NEW_TASK_DEF | jq -c .)
-          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF_JSON"
-
-          echo "Updating ECS service..."
-          aws ecs update-service \
-            --cluster $CLUSTER_NAME \
-            --service $SERVICE_NAME \
-            --force-new-deployment
